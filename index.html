@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Remilia's Galactic Fury</title>
+    <style>
+        canvas { border: 1px solid black; background: white; display: block; margin: auto; max-width: 100%; height: auto; }
+        body { background: #000; margin: 0; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+        #score { position: absolute; top: 10px; left: 10px; color: black; font-family: Arial, sans-serif; font-size: 24px; }
+        #lives { position: absolute; bottom: 10px; left: 10px; display: flex; align-items: center; }
+        .life-icon { width: 30px; height: 30px; margin-right: 5px; }
+        #gameOverScreen { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            display: none; 
+            justify-content: center; 
+            align-items: center; 
+            flex-direction: column; 
+            background-color: rgba(0, 0, 0, 0.7); 
+        }
+        #gameOverImage {
+            max-width: 80%;
+            max-height: 60%;
+        }
+        #restartButton {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 18px;
+        }
+        @media (max-width: 768px) {
+            canvas { max-width: 95%; }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+    <div id="score">Score: 0</div>
+    <div id="lives"></div>
+    <div id="gameOverScreen">
+        <img id="gameOverImage" src="https://app.webhash.com/Links/uploads/block_images/26d7ac704d67e57e96111cb766749c85.jpeg" alt="Game Over">
+        <button id="restartButton">Restart Game</button>
+    </div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const restartButton = document.getElementById('restartButton');
+
+        // Make canvas responsive
+        function resizeCanvas() {
+            canvas.width = window.innerWidth * 0.95;
+            canvas.height = window.innerHeight * 0.8;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Game State
+        let remilia = {
+            x: canvas.width / 2 - 29, // Adjusted for 25% larger size
+            y: canvas.height - 65,
+            width: 58, // 25% larger than 46 (46 * 1.25 = 57.5, rounded to 58)
+            height: 58, // 25% larger than 46 (46 * 1.25 = 57.5, rounded to 58)
+            speed: 7,
+            lives: 3,
+            targetX: null
+        };
+
+        let enemies = [];
+        let bullets = [];
+        let level = 1;
+        let score = 0;
+        let gameOver = false;
+        let waveInterval = 2000;
+        let touchStartX = 0;
+        let isShooting = false;
+        let shootingInterval = null;
+
+        // Load Images
+        const remiliaImg = new Image();
+        remiliaImg.src = 'https://app.webhash.com/Links/uploads/block_images/dda6ca65a79fb4b77cfe0a35d182eac8.png';
+        
+        const lifeImg = new Image();
+        lifeImg.src = 'https://app.webhash.com/Links/uploads/block_images/8a3059dbef4a81af7498ca5627be7fc3.jpeg';
+        
+        // Initialize lives display
+        function updateLivesDisplay() {
+            const livesDiv = document.getElementById('lives');
+            livesDiv.innerHTML = '';
+            for (let i = 0; i < remilia.lives; i++) {
+                const lifeIcon = document.createElement('img');
+                lifeIcon.src = lifeImg.src;
+                lifeIcon.className = 'life-icon';
+                livesDiv.appendChild(lifeIcon);
+            }
+        }
+
+        // Load Bored Ape NFTs with gateway
+        function getBoredApeUrl(id) {
+            // Using a public IPFS gateway with direct image format
+            // Try a different gateway for better compatibility
+            return `https://gateway.pinata.cloud/ipfs/QmeSjSinHpPnmXmspMjwiXyN6zS4E9zccariGR3jxcaWtq/${id}`;
+        }
+
+        // Create enemy image cache with fallback option
+        const enemyImages = [];
+        const totalEnemyTypes = 10; // You can increase this if you want more variety
+
+        for (let i = 0; i < totalEnemyTypes; i++) {
+            const img = new Image();
+            img.src = getBoredApeUrl(i);
+            img.onerror = function() {
+                // If IPFS fails, use the fallback image
+                this.src = 'https://app.webhash.com/Links/uploads/block_images/26d7ac704d67e57e96111cb766749c85.jpeg';
+            };
+            enemyImages.push(img);
+        }
+
+        // Fallback enemy image
+        const fallbackEnemyImg = new Image();
+        fallbackEnemyImg.src = 'https://app.webhash.com/Links/uploads/block_images/26d7ac704d67e57e96111cb766749c85.jpeg';
+
+        // Improved Touch Controls
+        canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+        canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+        canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+        
+        function handleTouchStart(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            touchStartX = touch.clientX - rect.left;
+            
+            // Start shooting when touch begins
+            isShooting = true;
+            if (shootingInterval === null) {
+                shootBullet();
+                shootingInterval = setInterval(shootBullet, 500); // Shoot every 500ms
+            }
+        }
+        
+        function handleTouchMove(e) {
+            e.preventDefault();
+            if (gameOver) return;
+            
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const touchX = touch.clientX - rect.left;
+            
+            // Set target position for remilia to move to
+            remilia.targetX = Math.max(0, Math.min(canvas.width - remilia.width, touchX - remilia.width / 2));
+        }
+        
+        function handleTouchEnd(e) {
+            e.preventDefault();
+            // Stop shooting when touch ends
+            isShooting = false;
+            clearInterval(shootingInterval);
+            shootingInterval = null;
+        }
+        
+        // Also support mouse controls for desktop
+        canvas.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            touchStartX = e.clientX - rect.left;
+            
+            isShooting = true;
+            if (shootingInterval === null) {
+                shootBullet();
+                shootingInterval = setInterval(shootBullet, 500);
+            }
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            if (gameOver || !isShooting) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            
+            remilia.targetX = Math.max(0, Math.min(canvas.width - remilia.width, mouseX - remilia.width / 2));
+        });
+        
+        canvas.addEventListener('mouseup', () => {
+            isShooting = false;
+            clearInterval(shootingInterval);
+            shootingInterval = null;
+        });
+
+        // Linear interpolation for smooth movement
+        function lerp(start, end, t) {
+            return start + t * (end - start);
+        }
+
+        function shootBullet() {
+            if (gameOver) return;
+            bullets.push({ 
+                x: remilia.x + remilia.width / 2 - 2.5, 
+                y: remilia.y, 
+                speed: 10,
+                width: 5,
+                height: 10,
+                isPlayerBullet: true
+            });
+        }
+
+        // Spawn Enemy Wave with improved Galaga-style patterns
+        function spawnWave() {
+            const rows = Math.min(5, Math.ceil(level / 2)); // Increase rows with levels, max 5
+            const cols = Math.min(8, level + 3); // Increase cols with levels, max 11
+            const enemySpacing = 60;
+            const formationStartX = (canvas.width - (cols * enemySpacing)) / 2;
+            const formationStartY = 80;
+            
+            // Create the full formation of enemies
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    // Determine starting position (off-screen for entry animation)
+                    const side = Math.random() > 0.5 ? -50 : canvas.width + 50; // Start from left or right of screen
+                    
+                    // Create the enemy with proper Galaga-style attributes
+                    enemies.push({
+                        // Formation position (where they'll end up)
+                        formationX: formationStartX + col * enemySpacing,
+                        formationY: formationStartY + row * 50,
+                        
+                        // Current position (off-screen for entry)
+                        x: side,
+                        y: -50 - (row * 30) - (col * 10), // Staggered entry
+                        
+                        width: 40,
+                        height: 40,
+                        speed: 1 + (level * 0.1),
+                        health: 1 + Math.floor(level / 4),
+                        imageIndex: Math.floor(Math.random() * totalEnemyTypes),
+                        
+                        // Galaga-specific states
+                        state: 'entering', // 'entering', 'formation', 'attacking', 'returning'
+                        attackCooldown: 100 + Math.random() * 200,
+                        entryProgress: 0,
+                        attackProbability: 0.001 + (level * 0.0005)
+                    });
+                }
+            }
+        }
+
+        // Update Game
+        function update() {
+            if (gameOver) {
+                return;
+            }
+
+            // Move Remilia (smooth follow towards target)
+            if (remilia.targetX !== null) {
+                remilia.x = lerp(remilia.x, remilia.targetX, 0.2);
+            }
+
+            // Move Bullets
+            bullets.forEach(bullet => {
+                if (bullet.isPlayerBullet) {
+                    bullet.y -= bullet.speed;
+                } else {
+                    bullet.y += bullet.speed;
+                }
+            });
+            bullets = bullets.filter(b => b.y > 0 && b.y < canvas.height);
+
+            // Move Enemies with Galaga-style patterns
+            enemies.forEach(enemy => {
+                // Apply movement based on enemy state
+                switch(enemy.state) {
+                    case 'entering':
+                        // Entry path animation - swooping in to formation
+                        enemy.entryProgress += 0.01;
+                        if (enemy.entryProgress >= 1) {
+                            enemy.state = 'formation';
+                            enemy.x = enemy.formationX;
+                            enemy.y = enemy.formationY;
+                        } else {
+                            // Create a curved path to the formation position
+                            const t = enemy.entryProgress;
+                            const curveX = t * (2 - t); // Ease out quadratic
+                            const curveY = t; // Linear
+                            
+                            enemy.x = enemy.x + (enemy.formationX - enemy.x) * curveX * 0.05;
+                            enemy.y = enemy.y + (enemy.formationY - enemy.y) * curveY * 0.05;
+                        }
+                        break;
+                        
+                    case 'formation':
+                        // Hold position in formation with a slight bobbing movement
+                        const time = Date.now() / 1000;
+                        enemy.x = enemy.formationX + Math.sin(time + enemy.formationX) * 5;
+                        
+                        // Check if this enemy should break formation and attack
+                        if (Math.random() < enemy.attackProbability) {
+                            enemy.state = 'attacking';
+                            enemy.attackTargetX = remilia.x; // Target the player's current position
+                            enemy.attackProgress = 0;
+                        }
+                        
+                        // Occasionally shoot from formation
+                        if (Math.random() < 0.002 + (level * 0.0005)) {
+                            bullets.push({ 
+                                x: enemy.x + enemy.width / 2 - 2.5, 
+                                y: enemy.y + enemy.height, 
+                                speed: 4 + (level * 0.3),
+                                width: 5,
+                                height: 10,
+                                isPlayerBullet: false
+                            });
+                        }
+                        break;
+                        
+                    case 'attacking':
+                        // Dive bomb attack animation
+                        enemy.attackProgress += 0.02;
+                        
+                        if (enemy.attackProgress >= 1) {
+                            // Return to formation
+                            enemy.state = 'returning';
+                            enemy.returnStartX = enemy.x;
+                            enemy.returnStartY = enemy.y;
+                            enemy.returnProgress = 0;
+                        } else {
+                            // Create a dive bomb path
+                            const ap = enemy.attackProgress;
+                            enemy.y += (3 + level * 0.5) * ap; // Accelerate downward
+                            
+                            // Curve toward player's position
+                            enemy.x += (enemy.attackTargetX - enemy.x) * 0.03;
+                        }
+                        break;
+                        
+                    case 'returning':
+                        // Return to formation path
+                        enemy.returnProgress += 0.015;
+                        
+                        if (enemy.returnProgress >= 1) {
+                            enemy.state = 'formation';
+                            enemy.x = enemy.formationX;
+                            enemy.y = enemy.formationY;
+                        } else {
+                            // Create a curved path back to formation
+                            const t = enemy.returnProgress;
+                            const curveX = t; // Linear
+                            const curveY = t * t; // Ease in quadratic
+                            
+                            enemy.x = enemy.returnStartX + (enemy.formationX - enemy.returnStartX) * curveX;
+                            enemy.y = enemy.returnStartY + (enemy.formationY - enemy.returnStartY) * curveY;
+                        }
+                        break;
+                        
+                    default:
+                        // Fallback movement if state is unknown
+                        enemy.y += enemy.speed / 2;
+                }
+                
+                // Keep enemies within canvas bounds
+                if (enemy.x < 0) enemy.x = 0;
+                if (enemy.x > canvas.width - enemy.width) enemy.x = canvas.width - enemy.width;
+            });
+            
+            // Remove enemies that go off screen
+            enemies = enemies.filter(e => e.y < canvas.height);
+
+            // Enemy Attack (now handled in the enemy movement state system)
+            // This section is now empty as attacks are managed in the enemy state system
+
+            // Collision Detection
+            // Player bullets hitting enemies
+            enemies.forEach((enemy, eIndex) => {
+                bullets.forEach((bullet, bIndex) => {
+                    if (bullet.isPlayerBullet && 
+                        bullet.x < enemy.x + enemy.width && 
+                        bullet.x + bullet.width > enemy.x &&
+                        bullet.y < enemy.y + enemy.height && 
+                        bullet.y + bullet.height > enemy.y) {
+                        
+                        enemy.health--;
+                        bullets.splice(bIndex, 1);
+                        
+                        if (enemy.health <= 0) {
+                            enemies.splice(eIndex, 1);
+                            score += 20 * level;
+                        }
+                    }
+                });
+            });
+            
+            // Enemy bullets hitting player
+            bullets.forEach((bullet, bIndex) => {
+                if (!bullet.isPlayerBullet && 
+                    bullet.x < remilia.x + remilia.width && 
+                    bullet.x + bullet.width > remilia.x &&
+                    bullet.y < remilia.y + remilia.height && 
+                    bullet.y + bullet.height > remilia.y) {
+                    
+                    remilia.lives--;
+                    bullets.splice(bIndex, 1);
+                    updateLivesDisplay();
+                    
+                    if (remilia.lives <= 0) {
+                        endGame();
+                    }
+                }
+            });
+            
+            // Enemies colliding with player
+            enemies.forEach((enemy, eIndex) => {
+                if (enemy.x < remilia.x + remilia.width && 
+                    enemy.x + enemy.width > remilia.x &&
+                    enemy.y < remilia.y + remilia.height && 
+                    enemy.y + enemy.height > remilia.y) {
+                    
+                    remilia.lives--;
+                    enemies.splice(eIndex, 1);
+                    updateLivesDisplay();
+                    
+                    if (remilia.lives <= 0) {
+                        endGame();
+                    }
+                }
+            });
+
+            // Update Score Display
+            document.getElementById('score').textContent = `Score: ${score}`;
+
+            // Level Progression (spawn new wave when all enemies are cleared)
+            if (enemies.length === 0 && !gameOver) {
+                level++;
+                waveInterval = Math.max(1000, waveInterval - 200); // Decrease time between waves, min 1s
+                setTimeout(spawnWave, 1000); // Wait 1s before next wave
+            }
+
+            // Draw background stars (Galaga style)
+            const starCount = 50;
+            ctx.fillStyle = 'white';
+            for (let i = 0; i < starCount; i++) {
+                // Create stars at random positions if they don't exist
+                if (!window.stars) {
+                    window.stars = Array(starCount).fill().map(() => ({
+                        x: Math.random() * canvas.width,
+                        y: Math.random() * canvas.height,
+                        size: Math.random() * 2 + 1
+                    }));
+                }
+                
+                // Draw and update stars
+                const star = window.stars[i];
+                ctx.fillRect(star.x, star.y, star.size, star.size);
+                
+                // Move stars slowly down for parallax effect
+                star.y += 0.3;
+                if (star.y > canvas.height) {
+                    star.y = 0;
+                    star.x = Math.random() * canvas.width;
+                }
+            }
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw Remilia
+            if (remiliaImg.complete) {
+                ctx.drawImage(remiliaImg, remilia.x, remilia.y, remilia.width, remilia.height);
+            } else {
+                ctx.fillStyle = 'yellow';
+                ctx.fillRect(remilia.x, remilia.y, remilia.width, remilia.height); // Fallback
+            }
+            
+            // Draw Enemies
+            enemies.forEach(enemy => {
+                const enemyImg = enemyImages[enemy.imageIndex];
+                if (enemyImg && enemyImg.complete) {
+                    ctx.drawImage(enemyImg, enemy.x, enemy.y, enemy.width, enemy.height);
+                } else if (fallbackEnemyImg.complete) {
+                    ctx.drawImage(fallbackEnemyImg, enemy.x, enemy.y, enemy.width, enemy.height);
+                } else {
+                    ctx.fillStyle = 'red';
+                    ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height); // Fallback
+                }
+            });
+            
+            // Draw Bullets (using black rectangles)
+            ctx.fillStyle = 'black';
+            bullets.forEach(bullet => {
+                ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+            });
+
+            requestAnimationFrame(update);
+        }
+
+        function endGame() {
+            gameOver = true;
+            clearInterval(shootingInterval);
+            shootingInterval = null;
+            gameOverScreen.style.display = 'flex';
+        }
+
+        function restartGame() {
+            gameOver = false;
+            remilia.x = canvas.width / 2 - 29;
+            remilia.y = canvas.height - 65;
+            remilia.lives = 3;
+            remilia.speed = 7;
+            remilia.targetX = null;
+            enemies = [];
+            bullets = [];
+            level = 1;
+            score = 0;
+            waveInterval = 2000;
+            updateLivesDisplay();
+            gameOverScreen.style.display = 'none';
+            spawnWave();
+            requestAnimationFrame(update);
+        }
+
+        // Restart button event listener
+        restartButton.addEventListener('click', restartGame);
+
+        // Initialize the game
+        updateLivesDisplay();
+        spawnWave();
+        update();
+    </script>
+</body>
+</html>
