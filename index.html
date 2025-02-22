@@ -3,11 +3,50 @@
 <head>
     <title>Remilia's Galactic Fury</title>
     <style>
-        canvas { border: 1px solid black; background: white; display: block; margin: auto; max-width: 100%; height: auto; }
-        body { background: #000; margin: 0; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden; }
-        #score { position: absolute; top: 10px; left: 10px; color: black; font-family: Arial, sans-serif; font-size: 24px; }
-        #lives { position: absolute; bottom: 10px; left: 10px; display: flex; align-items: center; }
-        .life-icon { width: 30px; height: 30px; margin-right: 5px; }
+        body { 
+            background: #000; 
+            margin: 0; 
+            min-height: 100vh; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center; 
+            align-items: center; 
+            overflow: hidden;
+            padding: 20px;
+        }
+        .game-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 800px;
+        }
+        canvas { 
+            border: 1px solid black; 
+            background: white; 
+            display: block; 
+            width: 100%; 
+            height: auto; 
+        }
+        #score { 
+            color: white; 
+            font-family: Arial, sans-serif; 
+            font-size: 24px; 
+            align-self: flex-start;
+            margin-bottom: 5px;
+        }
+        #lives { 
+            display: flex; 
+            align-items: center; 
+            align-self: flex-start;
+            margin-top: 5px;
+        }
+        .life-icon { 
+            width: 30px; 
+            height: 30px; 
+            margin-right: 5px; 
+        }
         #gameOverScreen { 
             position: absolute; 
             top: 0; 
@@ -34,18 +73,17 @@
             cursor: pointer;
             font-size: 18px;
         }
-        @media (max-width: 768px) {
-            canvas { max-width: 95%; }
-        }
     </style>
 </head>
 <body>
-    <canvas id="gameCanvas" width="800" height="400"></canvas>
-    <div id="score">Score: 0</div>
-    <div id="lives"></div>
-    <div id="gameOverScreen">
-        <img id="gameOverImage" src="https://app.webhash.com/Links/uploads/block_images/26d7ac704d67e57e96111cb766749c85.jpeg" alt="Game Over">
-        <button id="restartButton">Restart Game</button>
+    <div class="game-container">
+        <div id="score">Score: 0</div>
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+        <div id="lives"></div>
+        <div id="gameOverScreen">
+            <img id="gameOverImage" src="https://app.webhash.com/Links/uploads/block_images/26d7ac704d67e57e96111cb766749c85.jpeg" alt="Game Over">
+            <button id="restartButton">Restart Game</button>
+        </div>
     </div>
     <script>
         const canvas = document.getElementById('gameCanvas');
@@ -55,8 +93,10 @@
 
         // Make canvas responsive
         function resizeCanvas() {
-            canvas.width = window.innerWidth * 0.95;
-            canvas.height = window.innerHeight * 0.8;
+            // Keep the aspect ratio but adjust the width to container
+            const container = document.querySelector('.game-container');
+            canvas.width = container.clientWidth;
+            canvas.height = (container.clientWidth / 800) * 400;
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
@@ -87,7 +127,7 @@
         remiliaImg.src = 'https://app.webhash.com/Links/uploads/block_images/dda6ca65a79fb4b77cfe0a35d182eac8.png';
         
         const lifeImg = new Image();
-        lifeImg.src = 'https://app.webhash.com/Links/uploads/block_images/8a3059dbef4a81af7498ca5627be7fc3.jpeg';
+        lifeImg.src = 'https://app.webhash.com/Links/uploads/block_images/937f9aab88eb677af82452c695f8947c.png';
         
         // Initialize lives display
         function updateLivesDisplay() {
@@ -210,41 +250,24 @@
             });
         }
 
-        // Spawn Enemy Wave with improved Galaga-style patterns
+        // Spawn Enemy Wave
         function spawnWave() {
             const rows = Math.min(5, Math.ceil(level / 2)); // Increase rows with levels, max 5
-            const cols = Math.min(8, level + 3); // Increase cols with levels, max 11
+            const cols = Math.min(8, level * 2); // Increase cols with levels, max 8
             const enemySpacing = 60;
-            const formationStartX = (canvas.width - (cols * enemySpacing)) / 2;
-            const formationStartY = 80;
-            
-            // Create the full formation of enemies
+            const startX = (canvas.width - (cols * enemySpacing)) / 2;
+            const startY = 50;
+
             for (let row = 0; row < rows; row++) {
                 for (let col = 0; col < cols; col++) {
-                    // Determine starting position (off-screen for entry animation)
-                    const side = Math.random() > 0.5 ? -50 : canvas.width + 50; // Start from left or right of screen
-                    
-                    // Create the enemy with proper Galaga-style attributes
                     enemies.push({
-                        // Formation position (where they'll end up)
-                        formationX: formationStartX + col * enemySpacing,
-                        formationY: formationStartY + row * 50,
-                        
-                        // Current position (off-screen for entry)
-                        x: side,
-                        y: -50 - (row * 30) - (col * 10), // Staggered entry
-                        
+                        x: startX + col * enemySpacing,
+                        y: startY + row * 50,
                         width: 40,
                         height: 40,
-                        speed: 1 + (level * 0.1),
-                        health: 1 + Math.floor(level / 4),
-                        imageIndex: Math.floor(Math.random() * totalEnemyTypes),
-                        
-                        // Galaga-specific states
-                        state: 'entering', // 'entering', 'formation', 'attacking', 'returning'
-                        attackCooldown: 100 + Math.random() * 200,
-                        entryProgress: 0,
-                        attackProbability: 0.001 + (level * 0.0005)
+                        speed: 1 + (level * 0.2),
+                        health: 1 + Math.floor(level / 3),
+                        imageIndex: Math.floor(Math.random() * totalEnemyTypes)
                     });
                 }
             }
@@ -271,96 +294,10 @@
             });
             bullets = bullets.filter(b => b.y > 0 && b.y < canvas.height);
 
-            // Move Enemies with Galaga-style patterns
+            // Move Enemies (simple downward movement with side-to-side motion)
             enemies.forEach(enemy => {
-                // Apply movement based on enemy state
-                switch(enemy.state) {
-                    case 'entering':
-                        // Entry path animation - swooping in to formation
-                        enemy.entryProgress += 0.01;
-                        if (enemy.entryProgress >= 1) {
-                            enemy.state = 'formation';
-                            enemy.x = enemy.formationX;
-                            enemy.y = enemy.formationY;
-                        } else {
-                            // Create a curved path to the formation position
-                            const t = enemy.entryProgress;
-                            const curveX = t * (2 - t); // Ease out quadratic
-                            const curveY = t; // Linear
-                            
-                            enemy.x = enemy.x + (enemy.formationX - enemy.x) * curveX * 0.05;
-                            enemy.y = enemy.y + (enemy.formationY - enemy.y) * curveY * 0.05;
-                        }
-                        break;
-                        
-                    case 'formation':
-                        // Hold position in formation with a slight bobbing movement
-                        const time = Date.now() / 1000;
-                        enemy.x = enemy.formationX + Math.sin(time + enemy.formationX) * 5;
-                        
-                        // Check if this enemy should break formation and attack
-                        if (Math.random() < enemy.attackProbability) {
-                            enemy.state = 'attacking';
-                            enemy.attackTargetX = remilia.x; // Target the player's current position
-                            enemy.attackProgress = 0;
-                        }
-                        
-                        // Occasionally shoot from formation
-                        if (Math.random() < 0.002 + (level * 0.0005)) {
-                            bullets.push({ 
-                                x: enemy.x + enemy.width / 2 - 2.5, 
-                                y: enemy.y + enemy.height, 
-                                speed: 4 + (level * 0.3),
-                                width: 5,
-                                height: 10,
-                                isPlayerBullet: false
-                            });
-                        }
-                        break;
-                        
-                    case 'attacking':
-                        // Dive bomb attack animation
-                        enemy.attackProgress += 0.02;
-                        
-                        if (enemy.attackProgress >= 1) {
-                            // Return to formation
-                            enemy.state = 'returning';
-                            enemy.returnStartX = enemy.x;
-                            enemy.returnStartY = enemy.y;
-                            enemy.returnProgress = 0;
-                        } else {
-                            // Create a dive bomb path
-                            const ap = enemy.attackProgress;
-                            enemy.y += (3 + level * 0.5) * ap; // Accelerate downward
-                            
-                            // Curve toward player's position
-                            enemy.x += (enemy.attackTargetX - enemy.x) * 0.03;
-                        }
-                        break;
-                        
-                    case 'returning':
-                        // Return to formation path
-                        enemy.returnProgress += 0.015;
-                        
-                        if (enemy.returnProgress >= 1) {
-                            enemy.state = 'formation';
-                            enemy.x = enemy.formationX;
-                            enemy.y = enemy.formationY;
-                        } else {
-                            // Create a curved path back to formation
-                            const t = enemy.returnProgress;
-                            const curveX = t; // Linear
-                            const curveY = t * t; // Ease in quadratic
-                            
-                            enemy.x = enemy.returnStartX + (enemy.formationX - enemy.returnStartX) * curveX;
-                            enemy.y = enemy.returnStartY + (enemy.formationY - enemy.returnStartY) * curveY;
-                        }
-                        break;
-                        
-                    default:
-                        // Fallback movement if state is unknown
-                        enemy.y += enemy.speed / 2;
-                }
+                enemy.y += enemy.speed / 2;
+                enemy.x += Math.sin(Date.now() / 1000 + enemy.y) * 1.5; // Add some side-to-side movement
                 
                 // Keep enemies within canvas bounds
                 if (enemy.x < 0) enemy.x = 0;
@@ -370,8 +307,19 @@
             // Remove enemies that go off screen
             enemies = enemies.filter(e => e.y < canvas.height);
 
-            // Enemy Attack (now handled in the enemy movement state system)
-            // This section is now empty as attacks are managed in the enemy state system
+            // Enemy Attack (randomly shoot back)
+            enemies.forEach(enemy => {
+                if (Math.random() < 0.002 + (level * 0.0005)) {
+                    bullets.push({ 
+                        x: enemy.x + enemy.width / 2 - 2.5, 
+                        y: enemy.y + enemy.height, 
+                        speed: 4 + (level * 0.5),
+                        width: 5,
+                        height: 10,
+                        isPlayerBullet: false
+                    });
+                }
+            });
 
             // Collision Detection
             // Player bullets hitting enemies
@@ -439,30 +387,7 @@
                 setTimeout(spawnWave, 1000); // Wait 1s before next wave
             }
 
-            // Draw background stars (Galaga style)
-            const starCount = 50;
-            ctx.fillStyle = 'white';
-            for (let i = 0; i < starCount; i++) {
-                // Create stars at random positions if they don't exist
-                if (!window.stars) {
-                    window.stars = Array(starCount).fill().map(() => ({
-                        x: Math.random() * canvas.width,
-                        y: Math.random() * canvas.height,
-                        size: Math.random() * 2 + 1
-                    }));
-                }
-                
-                // Draw and update stars
-                const star = window.stars[i];
-                ctx.fillRect(star.x, star.y, star.size, star.size);
-                
-                // Move stars slowly down for parallax effect
-                star.y += 0.3;
-                if (star.y > canvas.height) {
-                    star.y = 0;
-                    star.x = Math.random() * canvas.width;
-                }
-            }
+            // Draw
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
             // Draw Remilia
@@ -486,7 +411,7 @@
                 }
             });
             
-            // Draw Bullets (using black rectangles)
+            // Draw Bullets (black rectangles)
             ctx.fillStyle = 'black';
             bullets.forEach(bullet => {
                 ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
